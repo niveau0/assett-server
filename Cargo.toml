@@ -1,0 +1,20 @@
+[package]
+name = "asset-server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum          = { version = "0.7", features = ["multipart"] }
+tokio         = { version = "1",   features = ["full"] }
+tokio-util    = { version = "0.7", features = ["io"] }
+tower-http    = { version = "0.5", features = ["trace"] }
+serde         = { version = "1",   features = ["derive"] }
+serde_json    = "1"
+toml          = "0.8"
+clap          = { version = "4",   features = ["derive"] }
+chrono        = { version = "0.4", features = ["serde"] }
+tracing       = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow        = "1"
+sha2          = "0.10"
+percent-encoding = "2"
