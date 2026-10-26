@@ -148,3 +148,16 @@ not supported.
 - No upload size limit; use a reverse proxy if exposed publicly.
 - Run behind a reverse proxy (nginx/caddy) for TLS.
 - Logging: `RUST_LOG=debug ./asset-server --config config.toml`.
+
+## just helpers
+
+Set `API_KEY` (admin or project key) and optionally `ASSET_URL` (default `http://localhost:3000`),
+e.g. in a `.env` file. `CURL_OPTS="-k"` is passed to curl (self-signed certs).
+
+```sh
+just create <name> <project-key>     # admin
+just upload <project> <file> [true]  # optional public flag
+just files <project>
+just download <project> <file>
+just set-key <project> <new-key>
+```

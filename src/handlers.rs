@@ -61,7 +61,9 @@ impl From<anyhow::Error> for AppError {
 
 impl From<axum::extract::multipart::MultipartError> for AppError {
     fn from(err: axum::extract::multipart::MultipartError) -> Self {
-        AppError::BadRequest(err.to_string())
+        use std::error::Error;
+        let detail = err.source().map(|s| format!(": {s}")).unwrap_or_default();
+        AppError::BadRequest(format!("{err}{detail}"))
     }
 }
 

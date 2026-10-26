@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use axum::{
-    Router, middleware,
+    Router,
+    extract::DefaultBodyLimit,
+    middleware,
     routing::{get, post},
 };
 use clap::Parser;
@@ -73,6 +75,7 @@ async fn main() -> Result<()> {
                 .put(handlers::update_project),
         )
         .route("/assets/:project/:filename", get(handlers::download))
+        .layer(DefaultBodyLimit::disable())
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth::auth_middleware,
