@@ -24,7 +24,7 @@ create name project_key:
 
 # Upload a file: just upload <project> <file> [true|public=true]
 upload project file public="false":
-    @{{curl}} -X POST {{url}}/assets/{{project}} -H "X-Api-Key: {{key}}" -F "file=@{{file}}" -F "public={{ trim_start_match(public, "public=") }}"
+    @{{curl}} -k -v -X POST {{url}}/assets/{{project}} -H "X-Api-Key: {{key}}" -F "file=@{{file}}" -F "public={{ trim_start_match(public, "public=") }}"
 
 # List metadata of a project (all files with key, public only without)
 files project:

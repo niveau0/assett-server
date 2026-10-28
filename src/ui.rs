@@ -1,11 +1,14 @@
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
+    http::{StatusCode, header},
     response::{Html, IntoResponse, Response},
 };
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 
 use crate::AppState;
+
+const README_FILE: &str = "README.html";
+const README_MAX_BYTES: u64 = 1024 * 1024;
 
 const PATH_SEGMENT: &AsciiSet = &CONTROLS
     .add(b' ')
@@ -26,7 +29,11 @@ pub async fn index(State(state): State<AppState>) -> Html<String> {
     let mut items = String::new();
 
     for (name, project) in &metadata.projects {
-        let public_count = project.files.values().filter(|file| file.public).count();
+        let public_count = project
+            .files
+            .iter()
+            .filter(|(name, file)| file.public && name.as_str() != README_FILE)
+            .count();
         if public_count == 0 {
             continue;
         }
@@ -49,43 +56,68 @@ pub async fn index(State(state): State<AppState>) -> Html<String> {
 
 /// GET /ui/{project}
 pub async fn project(State(state): State<AppState>, Path(project): Path<String>) -> Response {
-    let metadata = state.metadata.read().await;
-    let Some(project_entry) = metadata.projects.get(&project) else {
-        return not_found();
-    };
-
-    let project_segment = utf8_percent_encode(&project, PATH_SEGMENT);
+    let project_segment = utf8_percent_encode(&project, PATH_SEGMENT).to_string();
     let mut rows = String::new();
     let mut has_public_file = false;
+    let mut readme_size = None;
 
-    for (name, file) in &project_entry.files {
-        if !file.public {
-            continue;
+    {
+        let metadata = state.metadata.read().await;
+        let Some(project_entry) = metadata.projects.get(&project) else {
+            return not_found();
+        };
+
+        for (name, file) in &project_entry.files {
+            if name == README_FILE {
+                readme_size = Some(file.size);
+                continue;
+            }
+            if !file.public {
+                continue;
+            }
+            has_public_file = true;
+
+            let file_segment = utf8_percent_encode(name, PATH_SEGMENT);
+            let href = format!("/assets/{project_segment}/{file_segment}");
+            rows.push_str(&format!(
+                r#"<tr><td><a href="{href}">{name}</a></td><td>{size}</td><td>{modified}</td></tr>"#,
+                name = escape_html(name),
+                size = human_size(file.size),
+                modified = file
+                    .modified_at
+                    .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            ));
         }
-        has_public_file = true;
-
-        let file_segment = utf8_percent_encode(name, PATH_SEGMENT);
-        let href = format!("/assets/{project_segment}/{file_segment}");
-        rows.push_str(&format!(
-            r#"<tr><td><a href="{href}">{name}</a></td><td>{size}</td><td>{modified}</td></tr>"#,
-            name = escape_html(name),
-            size = human_size(file.size),
-            modified = file
-                .modified_at
-                .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-        ));
     }
 
     if !has_public_file {
         return not_found();
     }
 
-    let body = format!(
+    let readme = match readme_size {
+        Some(size) if size <= README_MAX_BYTES => {
+            let path = state.config.storage_path.join(&project).join(README_FILE);
+            tokio::fs::read_to_string(path).await.ok()
+        }
+        _ => None,
+    };
+
+    let mut body = format!(
         r#"<p><a href="/">&larr; Projects</a></p><h1>{project}</h1><table><thead><tr><th>File</th><th>Size</th><th>Modified</th></tr></thead><tbody>{rows}</tbody></table>"#,
         project = escape_html(&project),
     );
+    if let Some(readme) = readme {
+        body.push_str(&format!(r#"<div class="readme">{readme}</div>"#));
+    }
 
-    Html(page(&project, &body)).into_response()
+    (
+        [(
+            header::CONTENT_SECURITY_POLICY,
+            "default-src 'none'; style-src 'unsafe-inline'; img-src * data:; font-src data:",
+        )],
+        Html(page(&project, &body)),
+    )
+        .into_response()
 }
 
 fn not_found() -> Response {
@@ -150,6 +182,8 @@ table {{ width: 100%; border-collapse: collapse; }}
 th, td {{ text-align: left; padding: .4rem .5rem; border-bottom: 1px solid #eee; }}
 th {{ font-size: .8rem; text-transform: uppercase; color: #666; }}
 .muted {{ color: #777; font-size: .9rem; }}
+.readme {{ margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #eee; }}
+.readme img {{ max-width: 100%; }}
 </style>
 </head>
 <body>{body}</body>
